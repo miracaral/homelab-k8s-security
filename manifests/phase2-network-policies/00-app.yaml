@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: frontend, namespace: demo}
+spec:
+  selector: {matchLabels: {app: frontend}}
+  template:
+    metadata: {labels: {app: frontend, tier: web}}
+    spec:
+      containers:
+      - name: shell
+        image: nicolaka/netshoot:v0.13
+        command: ["sleep", "infinity"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: backend, namespace: demo}
+spec:
+  selector: {matchLabels: {app: backend}}
+  template:
+    metadata: {labels: {app: backend, tier: api}}
+    spec:
+      containers:
+      - name: api
+        image: mccutchen/go-httpbin:v2.15.0
+        ports: [{containerPort: 8080}]
+      - name: shell
+        image: nicolaka/netshoot:v0.13
+        command: ["sleep", "infinity"]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: backend, namespace: demo}
+spec:
+  selector: {app: backend}
+  ports: [{port: 8080, targetPort: 8080}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: db, namespace: demo}
+spec:
+  selector: {matchLabels: {app: db}}
+  template:
+    metadata: {labels: {app: db, tier: data}}
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports: [{containerPort: 6379}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: db, namespace: demo}
+spec:
+  selector: {app: db}
+  ports: [{port: 6379, targetPort: 6379}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: attacker, namespace: demo}
+spec:
+  selector: {matchLabels: {app: attacker}}
+  template:
+    metadata: {labels: {app: attacker}}
+    spec:
+      containers:
+      - name: shell
+        image: nicolaka/netshoot:v0.13
+        command: ["sleep", "infinity"]

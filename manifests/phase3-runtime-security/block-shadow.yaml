@@ -1,0 +1,30 @@
+# Phase 3: kill any process in the "demo" namespace that tries to read
+# /etc/shadow or /etc/gshadow. Namespaced on purpose: a cluster-wide
+# version would also kill sshd/sudo on the nodes and lock you out.
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicyNamespaced
+metadata:
+  name: block-sensitive-file-read
+  namespace: demo
+spec:
+  kprobes:
+  - call: "security_file_permission"
+    syscall: false
+    args:
+    - index: 0
+      type: "file"   # struct file *  -> gives the path
+    - index: 1
+      type: "int"    # mask: 4 = MAY_READ
+    selectors:
+    - matchArgs:
+      - index: 0
+        operator: "Equal"
+        values:
+        - "/etc/shadow"
+        - "/etc/gshadow"
+      - index: 1
+        operator: "Equal"
+        values:
+        - "4"
+      matchActions:
+      - action: Sigkill

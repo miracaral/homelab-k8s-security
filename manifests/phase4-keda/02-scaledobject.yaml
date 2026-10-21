@@ -1,0 +1,16 @@
+# KEDA: one worker per 5 queued jobs, between 0 and 10 replicas
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata: {name: worker-scaler, namespace: jobs}
+spec:
+  scaleTargetRef: {name: worker}
+  minReplicaCount: 0
+  maxReplicaCount: 10
+  pollingInterval: 5     # check the queue every 5 s
+  cooldownPeriod: 30     # back to 0 after 30 s of an empty queue
+  triggers:
+  - type: redis
+    metadata:
+      address: redis.jobs.svc.cluster.local:6379
+      listName: jobs
+      listLength: "5"

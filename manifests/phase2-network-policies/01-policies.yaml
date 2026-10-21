@@ -1,0 +1,74 @@
+# 1) Default deny: every pod in "demo" is locked down in both directions
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: {name: default-deny, namespace: demo}
+spec:
+  endpointSelector: {}
+  ingress:
+  - {}
+  egress:
+  - {}
+---
+# 2) DNS: every pod may query the cluster DNS (and nothing else via this rule)
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: {name: allow-dns, namespace: demo}
+spec:
+  endpointSelector: {}
+  egress:
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: kube-system
+        k8s-app: kube-dns
+    toPorts:
+    - ports: [{port: "53", protocol: ANY}]
+      rules:
+        dns: [{matchPattern: "*"}]
+---
+# 3) Web zone -> API zone (L4)
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: {name: frontend-to-backend, namespace: demo}
+spec:
+  endpointSelector: {matchLabels: {app: frontend}}
+  egress:
+  - toEndpoints: [{matchLabels: {app: backend}}]
+    toPorts:
+    - ports: [{port: "8080", protocol: TCP}]
+---
+# 4) API zone accepts only GET /get from the web zone (L7, enforced by Envoy)
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: {name: backend-ingress-l7, namespace: demo}
+spec:
+  endpointSelector: {matchLabels: {app: backend}}
+  ingress:
+  - fromEndpoints: [{matchLabels: {app: frontend}}]
+    toPorts:
+    - ports: [{port: "8080", protocol: TCP}]
+      rules:
+        http:
+        - method: GET
+          path: "/get"
+---
+# 5) API zone -> data zone
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: {name: backend-to-db, namespace: demo}
+spec:
+  endpointSelector: {matchLabels: {app: backend}}
+  egress:
+  - toEndpoints: [{matchLabels: {app: db}}]
+    toPorts:
+    - ports: [{port: "6379", protocol: TCP}]
+---
+# 6) Data zone accepts only the API zone
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: {name: db-ingress, namespace: demo}
+spec:
+  endpointSelector: {matchLabels: {app: db}}
+  ingress:
+  - fromEndpoints: [{matchLabels: {app: backend}}]
+    toPorts:
+    - ports: [{port: "6379", protocol: TCP}]

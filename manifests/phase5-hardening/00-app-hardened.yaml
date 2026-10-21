@@ -1,0 +1,93 @@
+# Phase 5: the demo app re-declared to satisfy Pod Security "restricted".
+# Same labels as phase2, so the network policies keep applying.
+# Each pod: non-root UID, no privilege escalation, all capabilities dropped,
+# RuntimeDefault seccomp.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: frontend, namespace: demo}
+spec:
+  selector: {matchLabels: {app: frontend}}
+  template:
+    metadata: {labels: {app: frontend, tier: web}}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+      - name: shell
+        image: nicolaka/netshoot:v0.13
+        command: ["sleep", "infinity"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: {drop: ["ALL"]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: backend, namespace: demo}
+spec:
+  selector: {matchLabels: {app: backend}}
+  template:
+    metadata: {labels: {app: backend, tier: api}}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+      - name: api
+        image: mccutchen/go-httpbin:v2.15.0
+        ports: [{containerPort: 8080}]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: {drop: ["ALL"]}
+      - name: shell
+        image: nicolaka/netshoot:v0.13
+        command: ["sleep", "infinity"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: {drop: ["ALL"]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: db, namespace: demo}
+spec:
+  selector: {matchLabels: {app: db}}
+  template:
+    metadata: {labels: {app: db, tier: data}}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports: [{containerPort: 6379}]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: {drop: ["ALL"]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: attacker, namespace: demo}
+spec:
+  selector: {matchLabels: {app: attacker}}
+  template:
+    metadata: {labels: {app: attacker}}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+      - name: shell
+        image: nicolaka/netshoot:v0.13
+        command: ["sleep", "infinity"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: {drop: ["ALL"]}

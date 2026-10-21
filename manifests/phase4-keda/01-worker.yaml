@@ -1,0 +1,30 @@
+# Worker: pops one job at a time from the "jobs" list and "processes" it for 3 s.
+# Starts at 0 replicas; KEDA scales it up and down.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: worker, namespace: jobs}
+spec:
+  replicas: 0
+  selector: {matchLabels: {app: worker}}
+  template:
+    metadata: {labels: {app: worker}}
+    spec:
+      containers:
+      - name: worker
+        image: redis:7-alpine
+        command: ["sh", "-c"]
+        args:
+        - |
+          while true; do
+            JOB=$(redis-cli -h redis BRPOP jobs 5 | tail -n 1)
+            if [ -n "$JOB" ]; then
+              echo "$(hostname) on $NODE processed $JOB"
+              sleep 3
+            fi
+          done
+        env:
+        - name: NODE
+          valueFrom: {fieldRef: {fieldPath: spec.nodeName}}
+        resources:
+          requests: {cpu: 50m, memory: 32Mi}
+          limits: {cpu: 200m, memory: 64Mi}
