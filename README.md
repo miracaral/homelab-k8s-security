@@ -23,11 +23,11 @@ I run the hardware at home and manage it remotely from abroad, so remote access 
                       │                    ┆
                 Tailscale (default)    WireGuard via VPS (backup, split tunnel)
                       │                    ┆
-   ┌──────────────────▼────────────────────▼─────────── home LAN 192.168.1.0/24 ──┐
-   │  pve1 (gateway + subnet router)     pve2                  pve3               │
-   │  ├─ k3s-master   .110               ├─ k3s-worker-2 .112  ├─ k3s-worker-4 .114│
-   │  └─ k3s-worker-1 .111               └─ k3s-worker-3 .113  └─ k3s-worker-5 .115│
-   └──────────────────────────────────────────────────────────────────────────────┘
+   ┌──────────────────▼────────────────────▼────────────── home LAN 192.168.1.0/24 ──┐
+   │  pve1 (gateway + subnet router)     pve2                  pve3                  │
+   │  ├─ k3s-master   .110               ├─ k3s-worker-2 .112  ├─ k3s-worker-4 .114  │
+   │  └─ k3s-worker-1 .111               └─ k3s-worker-3 .113  └─ k3s-worker-5 .115  │
+   └─────────────────────────────────────────────────────────────────────────────────┘
         Pod traffic between nodes: Cilium eBPF datapath, WireGuard-encrypted
 ```
 
@@ -112,6 +112,7 @@ kubectl label --overwrite ns demo pod-security.kubernetes.io/enforce=restricted
 - Lower the server VM to 4 GB RAM
 - Exclude the node IPs from the router's DHCP pool
 - Make the VPN watchdog check handshake age instead of ping
+- Lock down the `jobs` namespace from Phase 4: Redis there has no password and no network policy yet
 - Attack scenarios: container breakout attempts and lateral movement, verified against these controls
 
 ## License
