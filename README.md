@@ -13,6 +13,7 @@ I run the hardware at home and manage it remotely from abroad, so remote access 
 | 3. Runtime security | Tetragon TracingPolicy + Falco | `cat /etc/shadow` in a pod killed in the kernel (exit 137); Falco flags shells in containers |
 | 4. Autoscaling | KEDA scaling a worker from a Redis queue | 0 → 10 replicas in seconds, queue drained, back to 0 after cooldown |
 | 5. Hardening | Pod Security `restricted`, no SA tokens, kubelet locked down | Privileged/plain pods refused, token absent, kubelet 401 from network and unreachable from pods |
+| 6. Real workload | [Foothold](https://github.com/miracaral/Foothold) API + Oracle Database under the same controls | 1 ALLOW / 5 BLOCK, every BLOCK confirmed as `Policy denied` in Hubble; non-root, read-only filesystem, no token |
 
 ![Policy test after hardening](images/token-removed-and-policy-test.png)
 
@@ -56,6 +57,7 @@ I run the hardware at home and manage it remotely from abroad, so remote access 
 | 5 | [Runtime security](docs/05-runtime-security.md) | Phase 3: Tetragon detection and SIGKILL enforcement, Falco |
 | 6 | [KEDA autoscaling](docs/06-keda-autoscaling.md) | Phase 4: scale-to-zero workers from a Redis queue, tainting the control plane |
 | 7 | [Hardening](docs/07-hardening.md) | Phase 5: Pod Security Admission, ServiceAccount tokens, kubelet API, restricted pods |
+| 8 | [Real workload](docs/08-real-workload.md) | Phase 6: a Java API and Oracle Database, a rogue-pod test, proving BLOCKs with Hubble, a rolling kernel patch |
 
 ## Repository layout
 
@@ -106,6 +108,10 @@ kubectl label --overwrite ns demo pod-security.kubernetes.io/enforce=restricted
 11. Scope enforcement policies. A cluster-wide "kill on /etc/shadow read" also kills `sshd` and `sudo`.
 12. `warn=restricted` before `enforce=restricted`: the warnings are a ready-made hardening checklist.
 13. K3s does not taint its server node. Taint it if the control plane should not run workloads.
+14. A persistent volume mounted over an image's data directory hides what the image shipped there (Oracle `-faststart` → ORA-00205).
+15. A test that only ever says BLOCK proves nothing. Keep one expected ALLOW in every matrix and confirm drops in Hubble.
+16. The Cilium agent runs on the host network: point `hubble observe` at the Relay's IP, not its DNS name.
+17. Patch the hypervisor and the VMs separately; draining one node at a time keeps the cluster up.
 
 ## Next steps
 
