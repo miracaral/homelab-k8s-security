@@ -12,15 +12,16 @@ $K -n foothold wait --for=condition=Ready pod/rogue --timeout=60s >/dev/null 2>&
 ORACLE_IP=$($K -n foothold get svc oracle -o jsonpath='{.spec.clusterIP}')
 API_IP=$($K -n foothold get svc foothold-api -o jsonpath='{.spec.clusterIP}')
 
-ok() { if timeout 10 "$@" >/dev/null 2>&1; then echo "ALLOW"; else echo "BLOCK"; fi; }
+# The timeout runs inside the container: `timeout` cannot call the shell functions below.
+ok() { if "$@" >/dev/null 2>&1; then echo "ALLOW"; else echo "BLOCK"; fi; }
 api()   { $K -n foothold exec deploy/foothold-api -- bash -c "$1"; }
 rogue() { $K -n foothold exec rogue -- sh -c "$1"; }
 atk()   { $K -n demo exec deploy/attacker -c shell -- sh -c "$1"; }
 
 echo "== Network policies (namespace foothold)"
 printf "%-44s %s\n" "TEST" "RESULT"
-printf "%-44s %s\n" "api      -> oracle:1521"                 "$(ok api "exec 3<>/dev/tcp/oracle/1521")"
-printf "%-44s %s\n" "api      -> internet (1.1.1.1:443)"      "$(ok api "exec 3<>/dev/tcp/1.1.1.1/443")"
+printf "%-44s %s\n" "api      -> oracle:1521"                 "$(ok api "timeout 5 bash -c 'exec 3<>/dev/tcp/oracle/1521'")"
+printf "%-44s %s\n" "api      -> internet (1.1.1.1:443)"      "$(ok api "timeout 5 bash -c 'exec 3<>/dev/tcp/1.1.1.1/443'")"
 printf "%-44s %s\n" "rogue    -> oracle:1521 (by service IP)" "$(ok rogue "nc -z -w 3 $ORACLE_IP 1521")"
 printf "%-44s %s\n" "rogue    -> api:80 (by service IP)"      "$(ok rogue "nc -z -w 3 $API_IP 80")"
 printf "%-44s %s\n" "attacker -> oracle:1521 (from demo)"     "$(ok atk "nc -z -w 3 $ORACLE_IP 1521")"
