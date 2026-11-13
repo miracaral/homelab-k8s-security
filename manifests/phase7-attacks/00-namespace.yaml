@@ -1,0 +1,6 @@
+# Phase 7: an empty namespace with no controls at all. This is the "before".
+# Controls are added one at a time later (Pod Security, Cilium, Tetragon) and the same attempts are repeated.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: attack-lab

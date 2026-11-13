@@ -1,0 +1,14 @@
+# Phase 7, scenarios B and C: an ordinary pod that an attacker has taken over.
+# No host access of any kind. It is what `kubectl run` gives you: root, default ServiceAccount, token mounted.
+# Pinned to worker-5 like every other pod of this phase.
+apiVersion: v1
+kind: Pod
+metadata: {name: pwned, namespace: attack-lab, labels: {attack: pwned}}
+spec:
+  nodeSelector: {kubernetes.io/hostname: worker-5}
+  restartPolicy: Never
+  terminationGracePeriodSeconds: 0
+  containers:
+  - name: main
+    image: nicolaka/netshoot:v0.13
+    command: ["sleep", "1800"]

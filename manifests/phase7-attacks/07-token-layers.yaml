@@ -1,0 +1,46 @@
+# Phase 7, scenarios C1 to C3 after the controls. Two pods that differ in one line, so the result
+# can be pinned on that line. Both run as the over-privileged ServiceAccount from 03-overprivileged-sa.yaml
+# and both carry the label that 08-allow-apiserver.yaml selects.
+apiVersion: v1
+kind: Pod
+metadata: {name: pwned-token, namespace: attack-lab, labels: {attack: pwned-token, lab-api: allowed}}
+spec:
+  nodeSelector: {kubernetes.io/hostname: worker-5}
+  serviceAccountName: too-much
+  restartPolicy: Never
+  terminationGracePeriodSeconds: 0
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+  - name: main
+    image: nicolaka/netshoot:v0.13
+    command: ["sleep", "1800"]
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities: {drop: ["ALL"]}
+---
+# The same pod with the token not mounted. This is the only difference.
+apiVersion: v1
+kind: Pod
+metadata: {name: pwned-notoken, namespace: attack-lab, labels: {attack: pwned-notoken, lab-api: allowed}}
+spec:
+  nodeSelector: {kubernetes.io/hostname: worker-5}
+  serviceAccountName: too-much
+  automountServiceAccountToken: false
+  restartPolicy: Never
+  terminationGracePeriodSeconds: 0
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+  - name: main
+    image: nicolaka/netshoot:v0.13
+    command: ["sleep", "1800"]
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities: {drop: ["ALL"]}

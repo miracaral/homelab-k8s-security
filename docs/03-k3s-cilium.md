@@ -4,7 +4,7 @@
 
 **Result:** 6/6 nodes Ready, Cilium on every node, pod-to-pod traffic between nodes encrypted with WireGuard, and 83/83 connectivity tests passing.
 
-I ran all install commands inside tmux on pve1. pve1 and the VMs share the LAN, so a dropped mobile connection could not interrupt an install halfway.
+I ran all install commands inside tmux on hv-1. hv-1 and the VMs share the LAN, so a dropped mobile connection could not interrupt an install halfway.
 
 ## Server without a CNI
 
@@ -14,7 +14,7 @@ K3s ships with flannel, kube-proxy and traefik. Cilium replaces the first two, s
 curl -fL https://get.k3s.io | INSTALL_K3S_EXEC="server \
   --flannel-backend=none --disable-network-policy --disable-kube-proxy \
   --disable=traefik --disable=servicelb \
-  --node-ip=192.168.1.110 --write-kubeconfig-mode=644" sh -
+  --node-ip=<LAN>.110 --write-kubeconfig-mode=644" sh -
 ```
 
 | Flag | Why |
@@ -32,7 +32,7 @@ The node stays `NotReady` until a CNI is installed. That is expected.
 ```bash
 cilium install \
   --set kubeProxyReplacement=true \
-  --set k8sServiceHost=192.168.1.110 --set k8sServicePort=6443 \
+  --set k8sServiceHost=<LAN>.110 --set k8sServicePort=6443 \
   --set encryption.enabled=true --set encryption.type=wireguard \
   --set ipam.operator.clusterPoolIPv4PodCIDRList=10.42.0.0/16 \
   --set operator.replicas=1
@@ -48,12 +48,12 @@ Without kube-proxy, Cilium cannot use the `kubernetes` Service to find the API s
 
 ```
 NAME           STATUS   ROLES           VERSION        INTERNAL-IP
-k3s-master     Ready    control-plane   v1.36.5+k3s1   192.168.1.110
-k3s-worker-1   Ready    worker          v1.36.5+k3s1   192.168.1.111
-k3s-worker-2   Ready    worker          v1.36.5+k3s1   192.168.1.112
-k3s-worker-3   Ready    worker          v1.36.5+k3s1   192.168.1.113
-k3s-worker-4   Ready    worker          v1.36.5+k3s1   192.168.1.114
-k3s-worker-5   Ready    worker          v1.36.5+k3s1   192.168.1.115
+cp-1     Ready    control-plane   v1.36.5+k3s1   <LAN>.110
+worker-1   Ready    worker          v1.36.5+k3s1   <LAN>.111
+worker-2   Ready    worker          v1.36.5+k3s1   <LAN>.112
+worker-3   Ready    worker          v1.36.5+k3s1   <LAN>.113
+worker-4   Ready    worker          v1.36.5+k3s1   <LAN>.114
+worker-5   Ready    worker          v1.36.5+k3s1   <LAN>.115
 
 DaemonSet   cilium         Desired: 6, Ready: 6/6, Available: 6/6
 DaemonSet   cilium-envoy   Desired: 6, Ready: 6/6, Available: 6/6

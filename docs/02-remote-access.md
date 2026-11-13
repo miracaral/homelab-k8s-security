@@ -7,21 +7,21 @@ I manage this lab from abroad, usually over mobile data. Access went through a l
 ## The original setup
 
 ```
-laptop (10.50.0.50) ── WireGuard ── VPS hub (10.50.0.1) ── WireGuard ── pve1 (10.50.0.11) ── home LAN
+laptop (<WG>.50) ── WireGuard ── VPS hub (<WG>.1) ── WireGuard ── hv-1 (<WG>.11) ── home LAN
 ```
 
-pve1 is the gateway; pve2 and pve3 are reached through it. Proxmox web UIs are forwarded over SSH.
+hv-1 is the gateway; hv-2 and hv-3 are reached through it. Proxmox web UIs are forwarded over SSH.
 
 ## Symptom: SSH lags and drops
 
 ```
-Read from remote host 10.50.0.11: Connection reset by peer
+Read from remote host <WG>.11: Connection reset by peer
 ```
 
 First I ruled out the server with a single non-interactive command (load, memory, OOM kills, ZFS ARC, watchdog log, last WireGuard handshake):
 
 ```bash
-ssh -o ClearAllForwardings=yes pve1-remote 'uptime; free -h; dmesg -T | grep -iE "out of memory|killed process" | tail -5; tail -15 /var/log/vpn-watchdog.log; wg show wg0 | grep -E "handshake|transfer"'
+ssh -o ClearAllForwardings=yes hv-1-remote 'uptime; free -h; dmesg -T | grep -iE "out of memory|killed process" | tail -5; tail -15 /var/log/vpn-watchdog.log; wg show wg0 | grep -E "handshake|transfer"'
 ```
 
 The server was idle and healthy. So I measured the path hop by hop:
@@ -29,11 +29,11 @@ The server was idle and healthy. So I measured the path hop by hop:
 | Test | WireGuard | Loss | Note |
 | --- | --- | --- | --- |
 | laptop → VPS hub | on | 70% | 13 s outage |
-| laptop → pve1 | on | 5% | |
+| laptop → hv-1 | on | 5% | |
 | large packets (`ping -D -s 1352`) | on | 60% | big packets pass; loss comes from outages, not MTU |
 | laptop → 1.1.1.1 | on (full tunnel) | 57% | 15 s outages |
 | laptop → 1.1.1.1 | off | 5% | no outages |
-| laptop → pve1 over Tailscale | off | **0%** | relayed via DERP |
+| laptop → hv-1 over Tailscale | off | **0%** | relayed via DERP |
 
 Conclusion: the mobile carrier was throttling WireGuard's UDP traffic. `PersistentKeepalive = 25` did not help. And because the tunnel was a full tunnel (`AllowedIPs = 0.0.0.0/0`), all internet traffic went down with it.
 
@@ -45,15 +45,15 @@ Conclusion: the mobile carrier was throttling WireGuard's UDP traffic. `Persiste
 
 ```diff
 - AllowedIPs = 0.0.0.0/0
-+ AllowedIPs = 10.50.0.0/24
++ AllowedIPs = <WG>.0/24
 ```
 
-**3. pve1 became a subnet router**, so the laptop reaches every VM directly:
+**3. hv-1 became a subnet router**, so the laptop reaches every VM directly:
 
 ```bash
 echo 'net.ipv4.ip_forward = 1' > /etc/sysctl.d/99-tailscale.conf
 sysctl -p /etc/sysctl.d/99-tailscale.conf
-tailscale set --advertise-routes=192.168.1.0/24
+tailscale set --advertise-routes=<LAN>.0/24
 # then approve the route in the admin console
 ```
 
@@ -61,9 +61,9 @@ tailscale set --advertise-routes=192.168.1.0/24
 
 ```bash
 # ~/.zshrc on the laptop
-pve1() {
-  pgrep -f "fN.*pve1-ts" >/dev/null || ssh -fN -o ExitOnForwardFailure=yes pve1-ts   # web UI forwards
-  mosh --ssh="ssh -o ClearAllForwardings=yes" pve1-ts -- tmux new -A -s main
+hv-1() {
+  pgrep -f "fN.*hv-1-ts" >/dev/null || ssh -fN -o ExitOnForwardFailure=yes hv-1-ts   # web UI forwards
+  mosh --ssh="ssh -o ClearAllForwardings=yes" hv-1-ts -- tmux new -A -s main
 }
 ```
 
@@ -83,8 +83,8 @@ for id in 901 902; do qm set $id --sshkeys vm-keys.pub && qm reboot $id; done
 After the reboot SSH warned `REMOTE HOST IDENTIFICATION HAS CHANGED`. Not an attack: when Cloud-Init config changes, it runs again and regenerates the VM's host keys.
 
 ```bash
-for ip in 110 111 112 113 114 115; do ssh-keygen -R 192.168.1.$ip; done
-for ip in 110 111 112 113 114 115; do ssh -o StrictHostKeyChecking=accept-new <user>@192.168.1.$ip hostname; done
+for ip in 110 111 112 113 114 115; do ssh-keygen -R <LAN>.$ip; done
+for ip in 110 111 112 113 114 115; do ssh -o StrictHostKeyChecking=accept-new <user>@<LAN>.$ip hostname; done
 ```
 
 ## Problem: the VMs lost DNS
@@ -99,7 +99,7 @@ resolvectl status | grep -i "dns servers"  # 100.100.100.100
 
 The chain of events:
 
-1. `tailscale up` on pve1 replaced the host's resolver with Tailscale's (100.100.100.100).
+1. `tailscale up` on hv-1 replaced the host's resolver with Tailscale's (100.100.100.100).
 2. When the VMs rebooted for the SSH keys, Cloud-Init copied the host's DNS settings.
 3. The VMs are not on the tailnet, so that resolver was unreachable.
 4. `curl -s` in the install one-liner hid the error.

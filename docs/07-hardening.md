@@ -45,11 +45,11 @@ Each node's kubelet serves an API on port 10250.
 
 ```bash
 # from the node network, no credentials → authentication required
-curl -sk -o /dev/null -w "%{http_code}\n" https://192.168.1.111:10250/pods
+curl -sk -o /dev/null -w "%{http_code}\n" https://<LAN>.111:10250/pods
 401
 
 # from a pod → the request never reaches the kubelet
-kubectl -n demo exec deploy/attacker -- curl -sk -m 4 -o /dev/null -w "%{http_code}\n" https://192.168.1.111:10250/pods
+kubectl -n demo exec deploy/attacker -- curl -sk -m 4 -o /dev/null -w "%{http_code}\n" https://<LAN>.111:10250/pods
 000
 ```
 

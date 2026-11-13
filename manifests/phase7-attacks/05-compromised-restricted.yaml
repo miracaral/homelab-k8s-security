@@ -1,0 +1,22 @@
+# Phase 7, scenarios B and C after Pod Security: the compromised pod again, now in the only form
+# that "restricted" admits. Same image and tools as 02-compromised-pod.yaml, so the network results compare.
+# The ServiceAccount token is still mounted on purpose: "restricted" does not forbid it (scenario C1, step 2d).
+apiVersion: v1
+kind: Pod
+metadata: {name: pwned-restricted, namespace: attack-lab, labels: {attack: pwned-restricted}}
+spec:
+  nodeSelector: {kubernetes.io/hostname: worker-5}
+  restartPolicy: Never
+  terminationGracePeriodSeconds: 0
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+  - name: main
+    image: nicolaka/netshoot:v0.13
+    command: ["sleep", "1800"]
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities: {drop: ["ALL"]}

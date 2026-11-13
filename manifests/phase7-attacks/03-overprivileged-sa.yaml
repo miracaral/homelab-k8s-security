@@ -1,0 +1,41 @@
+# Phase 7, scenario C3: what a stolen token is worth when its ServiceAccount was given too much.
+# Everything here is fake and lives only in attack-lab. No real Secret is touched and no rights
+# outside this namespace are granted (a Role, not a ClusterRole).
+apiVersion: v1
+kind: Secret
+metadata: {name: dummy-secret, namespace: attack-lab}
+stringData:
+  note: this-is-a-fake-value-for-the-lab
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: too-much, namespace: attack-lab}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: read-secrets, namespace: attack-lab}
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: too-much-reads-secrets, namespace: attack-lab}
+subjects:
+- {kind: ServiceAccount, name: too-much, namespace: attack-lab}
+roleRef: {kind: Role, name: read-secrets, apiGroup: rbac.authorization.k8s.io}
+---
+# The same compromised pod, running as that ServiceAccount
+apiVersion: v1
+kind: Pod
+metadata: {name: pwned-sa, namespace: attack-lab, labels: {attack: pwned-sa}}
+spec:
+  nodeSelector: {kubernetes.io/hostname: worker-5}
+  serviceAccountName: too-much
+  restartPolicy: Never
+  terminationGracePeriodSeconds: 0
+  containers:
+  - name: main
+    image: nicolaka/netshoot:v0.13
+    command: ["sleep", "1800"]

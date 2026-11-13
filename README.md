@@ -14,6 +14,8 @@ I run the hardware at home and manage it remotely from abroad, so remote access 
 | 4. Autoscaling | KEDA scaling a worker from a Redis queue | 0 → 10 replicas in seconds, queue drained, back to 0 after cooldown |
 | 5. Hardening | Pod Security `restricted`, no SA tokens, kubelet locked down | Privileged/plain pods refused, token absent, kubelet 401 from network and unreachable from pods |
 | 6. Real workload | [Foothold](https://github.com/miracaral/Foothold) API + Oracle Database under the same controls | 1 ALLOW / 5 BLOCK, every BLOCK confirmed as `Policy denied` in Hubble; non-root, read-only filesystem, no token |
+| 7. Attack scenarios | Breakout, lateral movement and stolen-token attempts, before and after each control | 7/7 breakout pods admitted → 7/7 refused; hypervisor and router reachable from a pod → 66 flows `EGRESS DENIED`; stolen token reads a Secret → no connection / 401 / 403, one layer at a time |
+| 8. AI agents | [k8s-agent-sandbox](https://github.com/miracaral/k8s-agent-sandbox): Gemini CLI as short-lived task pods, controlled by `labctl` | Task pod reaches only the Gemini API (nodes, router, internet, GitHub dropped); injected instructions ignored by the model, and stopped by key masking, egress and Redis ACL when a script obeyed them; daily limit counted atomically |
 
 ![Policy test after hardening](images/token-removed-and-policy-test.png)
 
@@ -24,10 +26,10 @@ I run the hardware at home and manage it remotely from abroad, so remote access 
                       │                    ┆
                 Tailscale (default)    WireGuard via VPS (backup, split tunnel)
                       │                    ┆
-   ┌──────────────────▼────────────────────▼────────────── home LAN 192.168.1.0/24 ──┐
-   │  pve1 (gateway + subnet router)     pve2                  pve3                  │
-   │  ├─ k3s-master   .110               ├─ k3s-worker-2 .112  ├─ k3s-worker-4 .114  │
-   │  └─ k3s-worker-1 .111               └─ k3s-worker-3 .113  └─ k3s-worker-5 .115  │
+   ┌──────────────────▼────────────────────▼────────────── home LAN <LAN>.0/24 ──┐
+   │  hv-1 (gateway + subnet router)     hv-2                  hv-3                  │
+   │  ├─ cp-1   .110               ├─ worker-2 .112  ├─ worker-4 .114  │
+   │  └─ worker-1 .111               └─ worker-3 .113  └─ worker-5 .115  │
    └─────────────────────────────────────────────────────────────────────────────────┘
         Pod traffic between nodes: Cilium eBPF datapath, WireGuard-encrypted
 ```
@@ -55,9 +57,12 @@ I run the hardware at home and manage it remotely from abroad, so remote access 
 | 3 | [K3s + Cilium](docs/03-k3s-cilium.md) | Phase 1: CNI-less K3s, Cilium with WireGuard, connectivity tests, Hubble |
 | 4 | [Network policies](docs/04-network-policies.md) | Phase 2: zones, default deny, L7 HTTP rules, L7 block vs L3 drop |
 | 5 | [Runtime security](docs/05-runtime-security.md) | Phase 3: Tetragon detection and SIGKILL enforcement, Falco |
-| 6 | [KEDA autoscaling](docs/06-keda-autoscaling.md) | Phase 4: scale-to-zero workers from a Redis queue, tainting the control plane |
+| 6 | [KEDA autoscaling](docs/06-keda-autoscaling.md) | Phase 4: scale-to-zero workers from a Redis queue, tainting the control plane; follow-up: Redis password, network policies and Pod Security for the queue |
 | 7 | [Hardening](docs/07-hardening.md) | Phase 5: Pod Security Admission, ServiceAccount tokens, kubelet API, restricted pods |
 | 8 | [Real workload](docs/08-real-workload.md) | Phase 6: a Java API and Oracle Database, a rogue-pod test, proving BLOCKs with Hubble, a rolling kernel patch |
+| 9 | [Attack scenarios](docs/09-attack-scenarios.md) | Phase 7: container breakout, lateral movement, stolen credentials; which control stops which attempt; two findings (an ingress rule without `from`, pods reaching the home network); what was not measured |
+| 10 | [AI agents](docs/10-ai-agents.md) | Phase 8: an AI coding agent in the sandbox from [k8s-agent-sandbox](https://github.com/miracaral/k8s-agent-sandbox); what a task pod and a stolen credential can reach, before and after; the brakes; prompt injection; problems found |
+| 11 | [Security audit](docs/11-security-audit.md) | Threat model, self-attack with an injected agent, exposure check, repository scan (gitleaks), what was replaced by placeholders |
 
 ## Repository layout
 
@@ -68,9 +73,13 @@ I run the hardware at home and manage it remotely from abroad, so remote access 
 │   ├── phase2-network-policies/   demo app + 6 CiliumNetworkPolicies
 │   ├── phase3-runtime-security/   Tetragon TracingPolicyNamespaced
 │   ├── phase4-keda/               Redis queue, worker, ScaledObject
-│   └── phase5-hardening/          demo app meeting Pod Security "restricted"
+│   ├── phase4b-jobs-lockdown/     the same queue with a password, 4 policies, "restricted"
+│   ├── phase5-hardening/          demo app meeting Pod Security "restricted"
+│   ├── phase7-attacks/            breakout pods, compromised pods, lab policies (read before applying)
+│   └── phase8-ai-agents/          pointer to k8s-agent-sandbox, homelab-specific choices
 ├── scripts/         Proxmox template/clone, K3s + Cilium install, worker join,
-│                    policy test matrix, KEDA load + watch, VPN watchdog
+│                    policy test matrix, KEDA load + watch, queue lockdown test,
+│                    exposure check, attack scenarios, VPN watchdog
 └── images/          screenshots of results
 ```
 
@@ -113,13 +122,24 @@ kubectl label --overwrite ns demo pod-security.kubernetes.io/enforce=restricted
 16. The Cilium agent runs on the host network: point `hubble observe` at the Relay's IP, not its DNS name.
 17. Patch the hypervisor and the VMs separately; draining one node at a time keeps the cluster up.
 
+## Known limitations
+
+Found and measured, not fixed in this version:
+
+- **Pods in namespaces without a network policy reach the nodes and the home network** (`default`, `keda`, `falco`, `kube-system`). Measured in Phase 7 for a pod without policy ([finding 2](docs/09-attack-scenarios.md#finding-2-a-pod-could-reach-the-home-network)). The namespaces this lab uses (`demo`, `foothold`, `jobs`, `agents`, `agents-ops`) have default-deny.
+- **The `default` namespace has no Pod Security label**, so a privileged pod is admitted there.
+- **The Foothold API accepts connections from any pod** whose own namespace does not restrict egress ([finding 1](docs/09-attack-scenarios.md#finding-1-the-foothold-api-accepted-connections-from-any-pod)).
+- **DNS is a way out from the AI agents' task pods**: they may look up any name, and lookups are also forwarded with the home network's search suffix to the router ([doc 10](docs/10-ai-agents.md#8g-not-measured)).
+- **Addresses and names are placeholders.** `<LAN>`, `<WG>`, `cp-1`, `worker-N`, `hv-N` stand for this homelab's real values; set your own before running a script.
+
 ## Next steps
 
 - Lower the server VM to 4 GB RAM
 - Exclude the node IPs from the router's DHCP pool
 - Make the VPN watchdog check handshake age instead of ping
-- Lock down the `jobs` namespace from Phase 4: Redis there has no password and no network policy yet
-- Attack scenarios: container breakout attempts and lateral movement, verified against these controls
+- Cluster-wide default-deny, with exceptions for system namespaces: pods in namespaces without a network policy still reach the nodes and the home network ([finding 2](docs/09-attack-scenarios.md#finding-2-a-pod-could-reach-the-home-network))
+- Restrict the Foothold API's ingress to named senders ([finding 1](docs/09-attack-scenarios.md#finding-1-the-foothold-api-accepted-connections-from-any-pod))
+- Pod Security label for the `default` namespace
 
 ## License
 
