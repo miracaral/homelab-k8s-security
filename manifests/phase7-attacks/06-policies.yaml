@@ -1,0 +1,29 @@
+# Phase 7: network policies for attack-lab. The Phase 2 pattern, and nothing else:
+# no allow rule exists, because nothing in this namespace needs to talk to anything.
+
+# 1) Default deny: every pod in "attack-lab" is locked down in both directions
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: {name: default-deny, namespace: attack-lab}
+spec:
+  endpointSelector: {}
+  ingress:
+  - {}
+  egress:
+  - {}
+---
+# 2) DNS only. Names still resolve, so a failed connection later is the policy and not a lookup error.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: {name: allow-dns, namespace: attack-lab}
+spec:
+  endpointSelector: {}
+  egress:
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: kube-system
+        k8s-app: kube-dns
+    toPorts:
+    - ports: [{port: "53", protocol: ANY}]
+      rules:
+        dns: [{matchPattern: "*"}]

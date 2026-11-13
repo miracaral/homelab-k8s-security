@@ -36,6 +36,8 @@ The API image is built and pushed to `ghcr.io/miracaral/foothold-api` by the Foo
 
 Pod Security: a privileged pod and a plain root pod are both refused; the API runs as uid 10001, cannot write to its root filesystem and has no ServiceAccount token.
 
+> **Correction (Phase 7).** The two "→ API: BLOCK" rows are true for those two senders only. Both were stopped by the sender's own egress policy, not by the API's ingress rule: the `api` NetworkPolicy accepts port 8080 from any pod. A pod in a namespace without an egress policy reaches the API. Details in [Attack scenarios](09-attack-scenarios.md).
+
 ## 6c. Proving the BLOCKs are real
 
 A BLOCK only means "the connection did not succeed". It could also mean the test itself never ran. To rule that out, Hubble records why each packet was dropped. The Cilium agent runs on the host network and cannot resolve cluster DNS names, so it is pointed at the Hubble Relay by IP, which aggregates every node:

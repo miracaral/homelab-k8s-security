@@ -1,0 +1,129 @@
+# Phase 4 follow-up: the same queue, worker and scaler as phase4-keda, now with a Redis password
+# and pods that meet Pod Security "restricted".
+# The password lives in the Secret "redis-auth" (key "password"), created by hand and never committed:
+#   ( umask 077; d=$(mktemp -d -p /dev/shm); openssl rand -hex 24 | tr -d '\n' > "${d:?}/password"
+#     kubectl -n jobs create secret generic redis-auth --from-file="${d:?}"; rm -rf "${d:?}" )
+#   (not --from-literal: that puts the password into the process arguments)
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: redis, namespace: jobs}
+spec:
+  selector: {matchLabels: {app: redis}}
+  template:
+    metadata: {labels: {app: redis}}
+    spec:
+      # Setting "command" skips the image's entrypoint, which is what normally drops root.
+      # So the pod starts as the image's redis user (999:1000) directly.
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+      - name: redis
+        image: redis:7.4.11-alpine
+        # The password goes into a config file, not onto the command line:
+        # Tetragon and `ps` record process arguments, and "--requirepass <password>" would leak it.
+        command: ["sh", "-c"]
+        args:
+        - |
+          umask 077
+          printf 'requirepass %s\n' "$REDIS_PASSWORD" > /tmp/redis.conf
+          exec redis-server /tmp/redis.conf
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom: {secretKeyRef: {name: redis-auth, key: password}}
+        # redis-cli reads REDISCLI_AUTH by itself, so push-jobs.sh and keda-watch.sh keep working
+        - name: REDISCLI_AUTH
+          valueFrom: {secretKeyRef: {name: redis-auth, key: password}}
+        ports: [{containerPort: 6379}]
+        readinessProbe:
+          tcpSocket: {port: 6379}
+          periodSeconds: 5
+        resources:
+          requests: {cpu: 50m, memory: 64Mi}
+          limits: {cpu: 500m, memory: 256Mi}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: {drop: ["ALL"]}
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - {name: tmp, mountPath: /tmp}
+        - {name: data, mountPath: /data}
+      volumes:
+      # Redis writes its snapshot to /data; with a read-only root filesystem that needs its own volume
+      - name: data
+        emptyDir: {sizeLimit: 256Mi}
+      # in memory, so the config file with the password never touches the node's disk
+      - name: tmp
+        emptyDir: {medium: Memory, sizeLimit: 1Mi}
+---
+# Worker: REDISCLI_AUTH added, same security settings as Redis
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: worker, namespace: jobs}
+spec:
+  replicas: 0
+  selector: {matchLabels: {app: worker}}
+  template:
+    metadata: {labels: {app: worker}}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+      - name: worker
+        image: redis:7.4.11-alpine
+        command: ["sh", "-c"]
+        args:
+        - |
+          while true; do
+            JOB=$(redis-cli -h redis BRPOP jobs 5 | tail -n 1)
+            if [ -n "$JOB" ]; then
+              echo "$(hostname) on $NODE processed $JOB"
+              sleep 3
+            fi
+          done
+        env:
+        - name: NODE
+          valueFrom: {fieldRef: {fieldPath: spec.nodeName}}
+        - name: REDISCLI_AUTH
+          valueFrom: {secretKeyRef: {name: redis-auth, key: password}}
+        resources:
+          requests: {cpu: 50m, memory: 32Mi}
+          limits: {cpu: 200m, memory: 64Mi}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: {drop: ["ALL"]}
+          readOnlyRootFilesystem: true
+---
+# KEDA reads the password from the same Secret through a TriggerAuthentication
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata: {name: redis-auth, namespace: jobs}
+spec:
+  secretTargetRef:
+  - parameter: password
+    name: redis-auth
+    key: password
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata: {name: worker-scaler, namespace: jobs}
+spec:
+  scaleTargetRef: {name: worker}
+  minReplicaCount: 0
+  maxReplicaCount: 10
+  pollingInterval: 5
+  cooldownPeriod: 30
+  triggers:
+  - type: redis
+    metadata:
+      address: redis.jobs.svc.cluster.local:6379
+      listName: jobs
+      listLength: "5"
+    authenticationRef: {name: redis-auth}

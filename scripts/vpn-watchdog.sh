@@ -3,7 +3,7 @@
 #   * * * * * /root/vpn-watchdog.sh
 # Pings the WireGuard hub and restarts the tunnel if it does not answer.
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-HUB=10.50.0.1          # hub address inside the tunnel
+HUB=${HUB:?set HUB to the hub address inside the tunnel}
 LOG=/var/log/vpn-watchdog.log
 
 if ! ping -I wg0 -c 3 -W 5 "$HUB" > /dev/null 2>&1; then

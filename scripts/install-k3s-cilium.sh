@@ -2,7 +2,7 @@
 # Run on the control-plane VM. K3s without flannel, kube-proxy, traefik and
 # servicelb; Cilium replaces them and encrypts pod traffic with WireGuard.
 set -euo pipefail
-NODE_IP=${1:?control-plane IP, e.g. 192.168.1.110}
+NODE_IP=${1:?control-plane IP, e.g. <LAN>.110}
 
 curl -fL https://get.k3s.io | INSTALL_K3S_EXEC="server \
   --flannel-backend=none --disable-network-policy --disable-kube-proxy \

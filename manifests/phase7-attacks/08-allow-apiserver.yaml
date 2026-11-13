@@ -1,0 +1,13 @@
+# Phase 7, test aid for step 2d, not a recommended policy. default-deny (06-policies.yaml) already
+# cuts the path to the API server, so a stolen token cannot be tried at all. This rule reopens that
+# one path for the labelled test pods, so the token and RBAC layers can be measured on their own.
+# It is applied after the "network only" measurement and removed with the namespace.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: {name: lab-allow-apiserver, namespace: attack-lab}
+spec:
+  endpointSelector: {matchLabels: {lab-api: allowed}}
+  egress:
+  - toEntities: [kube-apiserver]
+    toPorts:
+    - ports: [{port: "6443", protocol: TCP}]

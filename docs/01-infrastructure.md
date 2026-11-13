@@ -12,18 +12,18 @@ Before this project, K3s was installed directly on the three Proxmox hosts (one 
 So I removed it and rebuilt the cluster inside VMs. Agents first, then the server:
 
 ```bash
-# pve2, pve3
+# hv-2, hv-3
 /usr/local/bin/k3s-agent-uninstall.sh
-# pve1
+# hv-1
 /usr/local/bin/k3s-uninstall.sh
 ```
 
 ### Rebooting hosts you cannot physically reach
 
-The hardware is in another country, so every reboot had to be one I was sure would come back. Only pve1 runs the VPN, so I rebooted in the order pve3 → pve2 → pve1, testing on the least critical node first, and made sure the tunnel starts on boot:
+The hardware is in another country, so every reboot had to be one I was sure would come back. Only hv-1 runs the VPN, so I rebooted in the order hv-3 → hv-2 → hv-1, testing on the least critical node first, and made sure the tunnel starts on boot:
 
 ```bash
-# pve1
+# hv-1
 systemctl enable wg-quick@wg0
 systemctl enable tailscaled
 crontab -l | grep vpn-watchdog
@@ -61,9 +61,9 @@ See [`scripts/create-template.sh`](../scripts/create-template.sh) and [`scripts/
 
 ```bash
 ./create-template.sh 9000 <user>
-./clone-vm.sh 9000 901 k3s-master   192.168.1.110
-./clone-vm.sh 9000 902 k3s-worker-1 192.168.1.111
-# ...same on pve2 (903, 904) and pve3 (905, 906)
+./clone-vm.sh 9000 901 cp-1   <LAN>.110
+./clone-vm.sh 9000 902 worker-1 <LAN>.111
+# ...same on hv-2 (903, 904) and hv-3 (905, 906)
 ```
 
 ## Problem: three clones, one IP address
@@ -72,19 +72,19 @@ The first boot used DHCP, and the router handed out the same addresses to differ
 
 | VM | IP from DHCP |
 | --- | --- |
-| 901 server | 192.168.1.107 |
-| 902 worker-1 | 192.168.1.108 |
-| 903 worker-2 | 192.168.1.107 (conflict) |
-| 904 worker-3 | 192.168.1.108 (conflict) |
-| 905 worker-4 | 192.168.1.107 (conflict) |
-| 906 worker-5 | 192.168.1.109 |
+| 901 server | <LAN>.107 |
+| 902 worker-1 | <LAN>.108 |
+| 903 worker-2 | <LAN>.107 (conflict) |
+| 904 worker-3 | <LAN>.108 (conflict) |
+| 905 worker-4 | <LAN>.107 (conflict) |
+| 906 worker-5 | <LAN>.109 |
 
 The cloud image's DHCP client identifies itself with a client ID derived from the machine ID, not the MAC. The clones shared it, so the router treated them as one device. Regenerating `/etc/machine-id` did not fully help because the router's lease cache kept the old identity.
 
 The real fix was to stop using DHCP for cluster nodes. A Kubernetes node that comes back on a different IP after a power cut breaks the cluster anyway:
 
 ```bash
-qm set 901 --ipconfig0 ip=192.168.1.110/24,gw=192.168.1.1
+qm set 901 --ipconfig0 ip=<LAN>.110/24,gw=<LAN>.1
 ```
 
 ## Problem: Falco would not start (found in Phase 3)

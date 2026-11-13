@@ -1,0 +1,52 @@
+# 1) Default deny: every pod in "jobs" is locked down in both directions
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: {name: default-deny, namespace: jobs}
+spec:
+  endpointSelector: {}
+  ingress:
+  - {}
+  egress:
+  - {}
+---
+# 2) DNS: the worker looks up "redis" by name
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: {name: allow-dns, namespace: jobs}
+spec:
+  endpointSelector: {}
+  egress:
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: kube-system
+        k8s-app: kube-dns
+    toPorts:
+    - ports: [{port: "53", protocol: ANY}]
+      rules:
+        dns: [{matchPattern: "*"}]
+---
+# 3) Worker -> Redis
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: {name: worker-to-redis, namespace: jobs}
+spec:
+  endpointSelector: {matchLabels: {app: worker}}
+  egress:
+  - toEndpoints: [{matchLabels: {app: redis}}]
+    toPorts:
+    - ports: [{port: "6379", protocol: TCP}]
+---
+# 4) Redis accepts only the worker and the KEDA operator (which polls the queue length from the "keda" namespace)
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: {name: redis-ingress, namespace: jobs}
+spec:
+  endpointSelector: {matchLabels: {app: redis}}
+  ingress:
+  - fromEndpoints:
+    - matchLabels: {app: worker}
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: keda
+        app: keda-operator
+    toPorts:
+    - ports: [{port: "6379", protocol: TCP}]
