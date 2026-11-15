@@ -139,7 +139,7 @@ Found and measured, not fixed in this version:
 - Make the VPN watchdog check handshake age instead of ping
 - Cluster-wide default-deny, with exceptions for system namespaces: pods in namespaces without a network policy still reach the nodes and the home network ([finding 2](docs/09-attack-scenarios.md#finding-2-a-pod-could-reach-the-home-network))
 - Restrict the Foothold API's ingress to named senders ([finding 1](docs/09-attack-scenarios.md#finding-1-the-foothold-api-accepted-connections-from-any-pod))
-- Pod Security label for the `default` namespace
+- Pod Security label for the `default` namespace.
 
 ## License
 
