@@ -36,7 +36,7 @@ The API image is built and pushed to `ghcr.io/miracaral/foothold-api` by the Foo
 
 Pod Security: a privileged pod and a plain root pod are both refused; the API runs as uid 10001, cannot write to its root filesystem and has no ServiceAccount token.
 
-> **Correction (Phase 7).** The two "→ API: BLOCK" rows are true for those two senders only. Both were stopped by the sender's own egress policy, not by the API's ingress rule: the `api` NetworkPolicy accepts port 8080 from any pod. A pod in a namespace without an egress policy reaches the API. Details in [Attack scenarios](09-attack-scenarios.md).
+> **Correction (Phase 7).** The two "→ API: BLOCK" rows are true for those two senders only. Both were stopped by the sender's own egress policy, not by the API's ingress rule: the `api` NetworkPolicy accepts port 8080 from any pod. A pod in a namespace without an egress policy reaches the API. Details in [Attack scenarios](09-attack-scenarios.md). Fixed on 2026-11-25: the `api` policy now has a `from` ([finding 1](09-attack-scenarios.md#finding-1-the-foothold-api-accepted-connections-from-any-pod)).
 
 ## 6c. Proving the BLOCKs are real
 

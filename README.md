@@ -127,8 +127,6 @@ kubectl label --overwrite ns demo pod-security.kubernetes.io/enforce=restricted
 Found and measured, not fixed in this version:
 
 - **Pods in namespaces without a network policy reach the nodes and the home network** (`default`, `keda`, `falco`, `kube-system`). Measured in Phase 7 for a pod without policy ([finding 2](docs/09-attack-scenarios.md#finding-2-a-pod-could-reach-the-home-network)). The namespaces this lab uses (`demo`, `foothold`, `jobs`, `agents`, `agents-ops`) have default-deny.
-- **The `default` namespace has no Pod Security label**, so a privileged pod is admitted there.
-- **The Foothold API accepts connections from any pod** whose own namespace does not restrict egress ([finding 1](docs/09-attack-scenarios.md#finding-1-the-foothold-api-accepted-connections-from-any-pod)).
 - **DNS is a way out from the AI agents' task pods**: they may look up any name, and lookups are also forwarded with the home network's search suffix to the router ([doc 10](docs/10-ai-agents.md#8g-not-measured)).
 - **Addresses and names are placeholders.** `<LAN>`, `<WG>`, `cp-1`, `worker-N`, `hv-N` stand for this homelab's real values; set your own before running a script.
 
@@ -138,8 +136,6 @@ Found and measured, not fixed in this version:
 - Exclude the node IPs from the router's DHCP pool
 - Make the VPN watchdog check handshake age instead of ping
 - Cluster-wide default-deny, with exceptions for system namespaces: pods in namespaces without a network policy still reach the nodes and the home network ([finding 2](docs/09-attack-scenarios.md#finding-2-a-pod-could-reach-the-home-network))
-- Restrict the Foothold API's ingress to named senders ([finding 1](docs/09-attack-scenarios.md#finding-1-the-foothold-api-accepted-connections-from-any-pod))
-- Pod Security label for the `default` namespace.
 
 ## License
 

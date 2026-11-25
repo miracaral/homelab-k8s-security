@@ -66,7 +66,7 @@ Working plan for the phases after Phase 6. Details and real output are in [BUILD
 - [x] Step 1 committed locally (branch `pre-publish`, 28477a4), not pushed
 - [x] 2a scenario A (breakout) before-runs on worker-5, all cleaned up
 - [x] 2a scenarios B and C before-runs, `attack-lab` emptied
-- [ ] Open question (decided 2026-11-11: note now, fix later): in the Foothold repo, add a `from` restriction to the `api` NetworkPolicy. Today it accepts ingress on 8080 from any pod in the cluster. Do not change Foothold during Step 2; write it up as a finding in the Phase 7 doc (docs/09)
+- [x] (done 2026-11-25: `from` added, see docs/09 finding 1) Open question (decided 2026-11-11: note now, fix later): in the Foothold repo, add a `from` restriction to the `api` NetworkPolicy. Today it accepts ingress on 8080 from any pod in the cluster. Do not change Foothold during Step 2; write it up as a finding in the Phase 7 doc (docs/09)
 - [x] 2b Pod Security `restricted` on `attack-lab`: 7/7 breakout pods refused
 - [x] 2c Cilium default-deny on `attack-lab`: every path to nodes, Proxmox, router, internet dropped (Hubble: 66 EGRESS DENIED, only DNS forwarded)
 - [x] 2d token/RBAC/Tetragon, layer by layer: network closed -> no connection; network open -> fake Secret read (control); no token -> 401; no RoleBinding -> 403; `/etc/shadow` as uid 1000 denied, as root killed by Tetragon (consistent with Phase 3)
@@ -78,7 +78,7 @@ Working plan for the phases after Phase 6. Details and real output are in [BUILD
 - [x] Final audit: run `scripts/attack-test.sh` on the cluster again. The committed version differs from the one that ran (2e) by the `printf` column width only and has not been run since; needs a temporary `attack-lab` namespace, deleted afterwards
 - [ ] Open question from 2c: namespaces without any network policy (`default`, `keda`, `falco`, `kube-system`) still reach the home network. Consider a cluster-wide default-deny with exceptions; risky on a remote-only cluster, plan separately
 - [x] Note for Step 3/4: Cilium sees the LAN (Proxmox, router) as `world`. Done: agent egress uses FQDN rules only; no rule allows 0.0.0.0/0
-- [ ] Open question from 2b: `default` namespace has no Pod Security label; decide whether to label it
+- [x] (done 2026-11-25: labeled `restricted`) Open question from 2b: `default` namespace has no Pod Security label; decide whether to label it
 - [x] Step 2 committed locally (branch `pre-publish`, fd7081c), not pushed
 - [x] Step 3, version 1 (sub-steps below; 3g, 3i, 3k are version 2)
 - [x] Step 4: `docs/10-ai-agents.md`, `manifests/phase8-ai-agents/`, README rows, link to repo B (commit c08b5b5)

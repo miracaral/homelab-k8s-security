@@ -85,13 +85,30 @@ $ kubectl -n foothold get networkpolicy api -o jsonpath='{.spec.ingress}'
 [{"ports":[{"port":8080,"protocol":"TCP"}]}]
 ```
 
-So any pod in a namespace without an egress policy reaches the API. The database behind it is not affected (Oracle accepts only the API). Status: **open**. The fix is a `from` restriction in the Foothold repo's `api` NetworkPolicy; a correction note was added under the Phase 6 table in [doc 8](08-real-workload.md). The lesson is about the test, not only the policy: a BLOCK has to be tried from a sender that nothing else is holding back.
+So any pod in a namespace without an egress policy reaches the API. The database behind it is not affected (Oracle accepts only the API). A correction note was added under the Phase 6 table in [doc 8](08-real-workload.md). The lesson is about the test, not only the policy: a BLOCK has to be tried from a sender that nothing else is holding back.
+
+Status: **closed** (2026-11-25). The `api` policy in the Foothold repo now has a `from`: only pods in `foothold` with the label `foothold-client: "true"` may connect on 8080. No pod carries that label today; I reach the API with `kubectl port-forward`, which does not go through network policies. Measured from a `restricted` pod in `default`, a namespace with no network policy, so nothing else holds the sender back:
+
+| Check | Before | After |
+| --- | --- | --- |
+| `default` pod → API service :80 | ALLOW | **BLOCK** |
+| API → Oracle :1521 | ALLOW (Phase 6) | ALLOW |
+| `/health` through port-forward | `UP` (Phase 6) | `UP`, pods running, no new restarts |
+
+Hubble now shows the drop at the API, not at the sender:
+
+```text
+default/probe:46471 (ID:1830) <> foothold/foothold-api-<pod>:8080 (ID:11527) policy-verdict:none INGRESS DENIED (TCP Flags: SYN)
+default/probe:46471 (ID:1830) <> foothold/foothold-api-<pod>:8080 (ID:11527) Policy denied DROPPED (TCP Flags: SYN)
+```
+
+Applying the file also reported `oracle-from-api configured`, although that policy has not changed in the repo since it was written. So the live object differed from the repo. I did not keep the old version and cannot say what the difference was. After the apply it matches the repo, and the API still reaches Oracle.
 
 ### Finding 2: a pod could reach the home network
 
 Rows B4 and B5. From a pod in a namespace with no network policy, the sshd of every node, the web UI and sshd of all three hypervisor hosts, and the home router's admin page were one TCP connection away. Nothing was attacked beyond the connection test, but this is the path from "one compromised container" to "the machines the cluster runs on".
 
-Status: **closed for `attack-lab`** (column 3), **open elsewhere**. `demo`, `foothold` and `jobs` have their own default-deny. `default`, `keda`, `falco` and `kube-system` have no network policy, so a pod created there still gets column 1. Closing it for the whole cluster needs a cluster-wide default with exceptions for the system namespaces; on a cluster I can only reach remotely that deserves its own plan, and it is listed in [Next steps](../README.md#next-steps).
+Status: **closed for `attack-lab`** (column 3), **open elsewhere**. `demo`, `foothold` and `jobs` have their own default-deny. `default`, `keda`, `falco` and `kube-system` have no network policy, so a pod created there still gets column 1. Since 2026-11-25 `default` has Pod Security `restricted` (a privileged pod was admitted before and is refused after), but it still has no network policy. Closing it for the whole cluster needs a cluster-wide default with exceptions for the system namespaces; on a cluster I can only reach remotely that deserves its own plan, and it is listed in [Next steps](../README.md#next-steps).
 
 One detail that matters for any future egress rule: Cilium labels the hypervisor hosts and the router as `world`, the same identity as the internet. A rule that allows `0.0.0.0/0` "for internet access" allows the home network too. Egress rules should name FQDNs or exclude the LAN range.
 
