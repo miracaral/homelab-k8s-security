@@ -1327,3 +1327,9 @@ Owner's decisions: Step 5 is version 2; install gitleaks; remove `__pycache__` f
 - **Drift**: `kubectl apply` also said `oracle-from-api configured`, though that file has not changed since it was written. The live object differed from the repo; the old version was not saved. It now matches the repo and API → Oracle still connects.
 - **`default` Pod Security**: server dry run of the label gave no warnings (only `probe` ran there). Labeled enforce, warn and audit = `restricted`. Privileged pod by server dry run: admitted before, refused after (`violates PodSecurity "restricted:latest"`). `probe` deleted.
 - README: the two items removed from Known limitations and Next steps; docs/09 finding 1 closed, finding 2 notes the label; docs/08 correction note points to the fix.
+
+## Follow-up (2026-11-25): DNS name list for the AI agents (repo B)
+
+- Both `allow-dns` rules (`agents`, `agents-ops`) allowed `*`; now a name list per role, and `ndots: 1` on task, fetcher and ops pods. Applied the policy file; added `ndots` to the live ScaledJobs and the ops Deployment with `kubectl patch`, because repo B's runner manifests carry the placeholder node name.
+- From a `restricted` pod with the Gemini label: `github.com` and `<random>.example.com` resolved before, `REFUSED` after; Gemini API and Redis resolve. Hubble: `dns-request proxy DROPPED` for the refused names; no `.lan` lookup in 25 minutes of test runs.
+- Repo B's runner and fetcher tests had been unschedulable since the audit (placeholder node name in the manifests they apply); they now take `NODE`. Three tests checked the API server by its short name, which the ops agent may no longer look up; they now use `KUBERNETES_SERVICE_HOST`. All four no-model tests pass. My own test pod carried the Gemini label and was picked by the runner test once; that run was discarded and repeated after deleting it.

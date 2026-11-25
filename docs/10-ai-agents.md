@@ -96,7 +96,7 @@ The first two rows are one model, one wording, one run each. "The model refused"
 - An agent pod without any of these controls: every "before" above comes from Phase 7's generic pod or is marked not measured.
 - A model that obeys an injection: the model ignored both fixtures; the "obeyed" row is a script.
 - Whether the Gemini CLI would run a shell command in headless mode: no shell call was made.
-- DNS as a way out: task pods may resolve any name, and names were also forwarded with the `.lan` suffix to the home router. Observed in Hubble, not closed.
+- DNS as a way out: task pods could resolve any name, and names were also forwarded with the `.lan` suffix to the home router. Closed on 2026-11-25 with a DNS name list per role and `ndots: 1`; measurements in the [k8s-agent-sandbox threat model](https://github.com/miracaral/k8s-agent-sandbox/blob/main/docs/threat-model.md#dns-allowlist-2026-11-25).
 - A node crash with Redis on it.
 - Some refused connection attempts of the fetcher-labelled test pod did not show as `EGRESS DENIED` in Hubble; not explained.
 

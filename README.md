@@ -127,7 +127,6 @@ kubectl label --overwrite ns demo pod-security.kubernetes.io/enforce=restricted
 Found and measured, not fixed in this version:
 
 - **Pods in namespaces without a network policy reach the nodes and the home network** (`default`, `keda`, `falco`, `kube-system`). Measured in Phase 7 for a pod without policy ([finding 2](docs/09-attack-scenarios.md#finding-2-a-pod-could-reach-the-home-network)). The namespaces this lab uses (`demo`, `foothold`, `jobs`, `agents`, `agents-ops`) have default-deny.
-- **DNS is a way out from the AI agents' task pods**: they may look up any name, and lookups are also forwarded with the home network's search suffix to the router ([doc 10](docs/10-ai-agents.md#8g-not-measured)).
 - **Addresses and names are placeholders.** `<LAN>`, `<WG>`, `cp-1`, `worker-N`, `hv-N` stand for this homelab's real values; set your own before running a script.
 
 ## Next steps
